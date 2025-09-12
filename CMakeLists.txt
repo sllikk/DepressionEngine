@@ -4,6 +4,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 project(DepressionEngine)
 
+#content and libs
 include(FetchContent)
 FetchContent_Declare(
       glfw
@@ -12,9 +13,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(glfw)
 
+
+
+
 add_subdirectory(src/vk_render)
 
 add_executable(DepressionEngine "src/Engine.h" "src/Engine.cpp" "src/IRender.h")
 
 target_link_libraries(DepressionEngine PUBLIC glfw)
 target_link_libraries(DepressionEngine PUBLIC VulkanRender)
+

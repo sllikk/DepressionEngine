@@ -1,6 +1,6 @@
 #include <iostream>
 #include "Engine.h"
-
+#include "vk_render/vk_render.h"
 
 void Window::create()
 {
@@ -15,6 +15,7 @@ void Window::create()
 	if (_window == nullptr)
 	{
 		std::cerr << "Failed create window" << std::endl;
+		return;
 	}
 
 }
@@ -24,6 +25,7 @@ void Window::destroy()
 	glfwTerminate();
 	glfwDestroyWindow(_window);
 	
+
 }
 	
 
@@ -31,21 +33,33 @@ void Window::destroy()
 void Engine::init()
 {
 	_window.create();
+	_render->init(_window.getWidth(), _window.getHeight(), _window.get_window_ptr());
 
 }
 
 void Engine::run()
 {
-	while (!glfwWindowShouldClose(_window.get_window_ptr())) {
+	while (_window.blsShouldCloseWindow() == false) {
 
 		glfwPollEvents();
 	
+		_render->beginRenderFrame();
+		_render->redner();
+		_render->endRenderFrame();
+
 	}
 }
 
 void Engine::cleanup()
 {
+	_render->cleanup();
 	_window.destroy();
+
+}
+
+Engine::Engine(std::unique_ptr<IRender> render) : _render(std::move(render))
+{	
+
 }
 
 
@@ -54,7 +68,9 @@ void Engine::cleanup()
 
 int main() {
 
-	Engine engine;
+	std::unique_ptr<VulkanRender> vk_render = std::make_unique<VulkanRender>();
+
+	Engine engine(std::move(vk_render));
 
 	try
 	{

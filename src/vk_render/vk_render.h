@@ -4,14 +4,30 @@
 #include <stdbool.h>
 #include <vector>
 #include <deque>
+#include <array>
 
+struct FrameData {
+	
+	VkCommandPool _commandPool;
+	VkCommandBuffer _commandBuffer;
+	VkSemaphore _renderSemaphore, _swapchainSemaphore;
+	VkFence _renderFence;
 
+};
+
+// triple buffering
+constexpr int FRAME_OVERLAP = 3;
 
 class VulkanRender : public IRender {
 
 	GLFWwindow* _window = nullptr;
 	bool blsEngineInit = false;
 	VkExtent2D _windowExtent{};
+	int frame = 0; // current frames
+	std::array<FrameData, FRAME_OVERLAP> _frames;
+
+	FrameData& get_current_frame() { return _frames[frame % FRAME_OVERLAP]; }
+
 
 	// enable validation layers for vulkan if debug, but disable if release 
 #if NDEBUG
@@ -30,7 +46,7 @@ class VulkanRender : public IRender {
 
 	VkSwapchainKHR _swapchain = VK_NULL_HANDLE;
 	VkExtent2D _swapchainExtent{};
-	VkFormat _swapchainImageFormat;
+	VkFormat _swapchainImageFormat = VK_FORMAT_UNDEFINED;
 
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
@@ -38,8 +54,6 @@ class VulkanRender : public IRender {
 	
 
 public:
-
-	VulkanRender() = default;
 
 	// Inherited via IRender
 	void init(int width, int height, void* ptr_window) override;

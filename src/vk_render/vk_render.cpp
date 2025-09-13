@@ -2,6 +2,8 @@
 #define GLFW_INCLUDE_VULKAN
 
 #include "vk_render.h"
+#include "vk_initializers.h"
+#include "vk_pipelines.h"
 
 #include <iostream>
 #include <VkBootstrap.h>
@@ -34,6 +36,16 @@ void VulkanRender::cleanup()
 {
 	if (blsEngineInit = true)
 	{
+		//make sure the gpu has stopped doing its things
+		vkDeviceWaitIdle(_device);
+
+		// destroy all command pool
+		for (int i = 0; i < FRAME_OVERLAP; i++) {	
+			vkDestroyCommandPool(_device, _frames[i]._commandPool, nullptr);
+		
+			
+		}
+
 		destroy_swapchain();
 
 		vkDestroySurfaceKHR(_instance, _surface, nullptr);
@@ -131,6 +143,17 @@ void VulkanRender::init_swapchain()
 
 void VulkanRender::init_commands()
 {
+	const VkCommandPoolCreateInfo& command_pool_info = vkinit::command_pool_create_info(_graphycsQueueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+	for (int i = 0; i < FRAME_OVERLAP; i++) {
+
+		VK_CHECK(vkCreateCommandPool(_device, &command_pool_info, nullptr, &_frames[i]._commandPool));
+
+		const VkCommandBufferAllocateInfo& allocate_buffer = vkinit::command_buffer_allocate_info(_frames[i]._commandPool, 1);
+		
+		VK_CHECK(vkAllocateCommandBuffers(_device, &allocate_buffer, &_frames[i]._commandBuffer));
+
+	}
 
 
 }

@@ -10,8 +10,8 @@ else()
     message(STATUS "Libraries: ${Vulkan_LIBRARIES}")
 endif()
 
-set( render_h  vk_render.h) 
-set( render_cpp  vk_render.cpp) 
+set( render_h  vk_render.h vk_descriptors.h vk_images.h vk_initializers.h vk_pipelines.h vk_types.h) 
+set( render_cpp  vk_render.cpp vk_descriptors.cpp vk_images.cpp vk_initializers.cpp vk_pipelines.cpp) 
 
 
 include(FetchContent)

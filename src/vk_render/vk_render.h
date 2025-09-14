@@ -1,3 +1,5 @@
+#pragma once
+
 #include "../IRender.h"
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
@@ -9,14 +11,15 @@
 struct FrameData {
 	
 	VkCommandPool _commandPool;
-	VkCommandBuffer _commandBuffer;
-	VkSemaphore _renderSemaphore, _swapchainSemaphore;
+	VkCommandBuffer _mainCommandBuffer;
+	VkSemaphore _renderSemaphore;
+	VkSemaphore _swapchainSemaphore;
 	VkFence _renderFence;
 
 };
 
 // triple buffering
-constexpr int FRAME_OVERLAP = 3;
+constexpr int FRAME_OVERLAP = 2;
 
 class VulkanRender : public IRender {
 
@@ -41,8 +44,8 @@ class VulkanRender : public IRender {
 	VkDevice _device = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT _debugMessenger = VK_NULL_HANDLE;
 	VkSurfaceKHR _surface = VK_NULL_HANDLE;
-	VkQueue _graphycsQueue = VK_NULL_HANDLE;
-	uint32_t _graphycsQueueIndex = NULL;
+	VkQueue _graphicsQueue = VK_NULL_HANDLE;
+	uint32_t _graphicsQueueIndex = NULL;
 
 	VkSwapchainKHR _swapchain = VK_NULL_HANDLE;
 	VkExtent2D _swapchainExtent{};
@@ -50,7 +53,7 @@ class VulkanRender : public IRender {
 
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
-
+	uint32_t swapchainImageIndex = 0;
 	
 
 public:
@@ -69,7 +72,10 @@ private:
 	void init_commands();
 	void init_sync_strucure();
 
+
 	void create_swapchain(int width, int height);
 	void destroy_swapchain();
+
+
 
 };

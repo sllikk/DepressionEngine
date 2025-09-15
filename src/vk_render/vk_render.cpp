@@ -6,6 +6,7 @@
 
 #include "vk_initializers.h"
 #include "vk_pipelines.h"
+#include "vk_images.h"
 
 #include <iostream>
 #include <VkBootstrap.h>
@@ -26,7 +27,7 @@ void VulkanRender::init(int width, int height, void* ptr_window)
 	init_vulkan();
 	init_swapchain();
 	init_commands();
-	init_sync_strucure();
+	init_sync_structures();
 
 	blsEngineInit = true;
 
@@ -67,23 +68,29 @@ void VulkanRender::cleanup()
 
 void VulkanRender::beginRenderFrame()
 {
-	//> draw_1
-		// wait until the gpu has finished rendering the last frame. Timeout of 1
-		// second
 	VK_CHECK(vkWaitForFences(_device, 1, &get_current_frame()._renderFence, true, 1000000000));
 	VK_CHECK(vkResetFences(_device, 1, &get_current_frame()._renderFence));
-	//< draw_1
+
 
 	VK_CHECK(vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, nullptr, &swapchainImageIndex));
+	//< draw_2
 
+	//> draw_3
+		//naming it cmd for shorter writing
 	VkCommandBuffer cmd = get_current_frame()._mainCommandBuffer;
 
+	// now that we are sure that the commands finished executing, we can safely
+	// reset the command buffer to begin recording again.
 	VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
+	//begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know that
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	//start the command buffer recording
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+	//< draw_3
+	// 
+	//> draw_4
 
 		//make the swapchain image into writeable mode before rendering
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -91,7 +98,7 @@ void VulkanRender::beginRenderFrame()
 	//make a clear-color from frame number. This will flash with a 120 frame period.
 	VkClearColorValue clearValue;
 	float flash = std::abs(std::sin(frame / 120.f));
-	clearValue = { { 0.0f, 1.0f, flash, 1.0f } };
+	clearValue = { { 0.0f, 0.0f, flash, 1.0f } };
 
 	VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -165,104 +172,74 @@ void VulkanRender::endRenderFrame()
 
 void VulkanRender::init_vulkan()
 {
-	vkb::InstanceBuilder insrance_builder;
+	//> init_instance
+	vkb::InstanceBuilder builder;
 
-	auto instance_ret = insrance_builder
-		.set_engine_name("DepressionEngine")
-		.require_api_version(1, 3, 0)
+	//make the vulkan instance, with basic debug features
+	auto inst_ret = builder.set_app_name("Example Vulkan Application")
+		.request_validation_layers(enable_validation_layers)
 		.use_default_debug_messenger()
-		.enable_validation_layers(enable_validation_layers)
+		.require_api_version(1, 3, 0)
 		.build();
 
-	
-	_instance = instance_ret.value();
-	_debugMessenger = instance_ret.value().debug_messenger;
+	vkb::Instance vkb_inst = inst_ret.value();
 
-	if (glfwCreateWindowSurface(_instance, _window, nullptr, &_surface) != VK_SUCCESS)
+	//grab the instance 
+	_instance = vkb_inst.instance;
+	_debugMessenger = vkb_inst.debug_messenger;
+
+	//< init_instance
+	// 
+	//> init_device
+	if(glfwCreateWindowSurface(_instance,  _window, nullptr, &_surface) != VK_SUCCESS)
 	{
-		std::cerr << "Failed create window surface" << std::endl;
+		std::cerr << "Error Create Window Surface " << std::endl;
 	}
-
-
 	//vulkan 1.3 features
 	VkPhysicalDeviceVulkan13Features features{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES };
-	features.synchronization2 = true;
 	features.dynamicRendering = true;
+	features.synchronization2 = true;
 
 	//vulkan 1.2 features
 	VkPhysicalDeviceVulkan12Features features12{ .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES };
 	features12.bufferDeviceAddress = true;
 	features12.descriptorIndexing = true;
 
-	vkb::PhysicalDeviceSelector selector{ instance_ret.value()};
-	vkb::PhysicalDevice gpu = selector.set_minimum_version(1, 3)
-		.set_required_features_12(features12)
+
+	//use vkbootstrap to select a gpu. 
+	//We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
+	vkb::PhysicalDeviceSelector selector{ vkb_inst };
+	vkb::PhysicalDevice physicalDevice = selector
+		.set_minimum_version(1, 3)
 		.set_required_features_13(features)
+		.set_required_features_12(features12)
 		.set_surface(_surface)
 		.select()
 		.value();
 
-	vkb::DeviceBuilder deviceBuilder{ gpu };
+
+	//create the final vulkan device
+	vkb::DeviceBuilder deviceBuilder{ physicalDevice };
 
 	vkb::Device vkbDevice = deviceBuilder.build().value();
-	
 
 	// Get the VkDevice handle used in the rest of a vulkan application
 	_device = vkbDevice.device;
-	_physicalDevice = vkbDevice.physical_device;
+	_chosenGPU = physicalDevice.physical_device;
+	//< init_device
 
+	//> init_queue
+		// use vkbootstrap to get a Graphics queue
 	_graphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
-	_graphicsQueueIndex = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
-
+	_graphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+	//< init_queue
 }
 
-
-void VulkanRender::init_swapchain()
+//> init_swap
+void VulkanRender::create_swapchain(uint32_t width, uint32_t height)
 {
-	create_swapchain(_windowExtent.width, _windowExtent.height);
-}
+	vkb::SwapchainBuilder swapchainBuilder{ _chosenGPU,_device,_surface };
 
-
-void VulkanRender::init_commands()
-{
-	const VkCommandPoolCreateInfo& command_pool_info = vkinit::command_pool_create_info(_graphicsQueueIndex, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
-
-	for (int i = 0; i < FRAME_OVERLAP; i++) {
-
-		VK_CHECK(vkCreateCommandPool(_device, &command_pool_info, nullptr, &_frames[i]._commandPool));
-
-		const VkCommandBufferAllocateInfo& allocate_buffer = vkinit::command_buffer_allocate_info(_frames[i]._commandPool, 1);
-		
-		VK_CHECK(vkAllocateCommandBuffers(_device, &allocate_buffer, &_frames[i]._mainCommandBuffer));
-
-	}
-
-
-}
-
-
-void VulkanRender::init_sync_strucure()
-{	
-	const VkFenceCreateInfo& fence_info = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
-	const VkSemaphoreCreateInfo& semaphore_info = vkinit::semaphore_create_info(0);
-
-
-	for (int i = 0; i < FRAME_OVERLAP; i++) {
-
-		 VK_CHECK(vkCreateFence(_device, &fence_info, nullptr, &_frames[i]._renderFence));
-		 VK_CHECK(vkCreateSemaphore(_device, &semaphore_info, nullptr, &_frames[i]._renderSemaphore));
-		 VK_CHECK(vkCreateSemaphore(_device, &semaphore_info, nullptr, &_frames[i]._swapchainSemaphore));
-	
-	}
-
-}
-
-
-
-void VulkanRender::create_swapchain(int width, int height)
-{
-	vkb::SwapchainBuilder swapchainBuilder{ _physicalDevice, _device, _surface };
-	
 	_swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
 
 	vkb::Swapchain vkbSwapchain = swapchainBuilder
@@ -280,7 +257,48 @@ void VulkanRender::create_swapchain(int width, int height)
 	_swapchain = vkbSwapchain.swapchain;
 	_swapchainImages = vkbSwapchain.get_images().value();
 	_swapchainImageViews = vkbSwapchain.get_image_views().value();
+}
 
+
+void VulkanRender::init_swapchain()
+{
+	create_swapchain(_windowExtent.width, _windowExtent.height);
+}
+
+void VulkanRender::init_commands()
+{
+	//create a command pool for commands submitted to the graphics queue.
+	//we also want the pool to allow for resetting of individual command buffers
+	VkCommandPoolCreateInfo commandPoolInfo = vkinit::command_pool_create_info(_graphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+
+	for (int i = 0; i < FRAME_OVERLAP; i++) {
+
+		VK_CHECK(vkCreateCommandPool(_device, &commandPoolInfo, nullptr, &_frames[i]._commandPool));
+
+		// allocate the default command buffer that we will use for rendering
+		VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(_frames[i]._commandPool, 1);
+
+		VK_CHECK(vkAllocateCommandBuffers(_device, &cmdAllocInfo, &_frames[i]._mainCommandBuffer));
+	}
+}
+
+
+
+void VulkanRender::init_sync_structures()
+{
+	//create syncronization structures
+	//one fence to control when the gpu has finished rendering the frame,
+	//and 2 semaphores to syncronize rendering with swapchain
+	//we want the fence to start signalled so we can wait on it on the first frame
+	VkFenceCreateInfo fenceCreateInfo = vkinit::fence_create_info(VK_FENCE_CREATE_SIGNALED_BIT);
+	VkSemaphoreCreateInfo semaphoreCreateInfo = vkinit::semaphore_create_info(0);
+
+	for (int i = 0; i < FRAME_OVERLAP; i++) {
+		VK_CHECK(vkCreateFence(_device, &fenceCreateInfo, nullptr, &_frames[i]._renderFence));
+
+		VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_frames[i]._swapchainSemaphore));
+		VK_CHECK(vkCreateSemaphore(_device, &semaphoreCreateInfo, nullptr, &_frames[i]._renderSemaphore));
+	}
 }
 
 void VulkanRender::destroy_swapchain()

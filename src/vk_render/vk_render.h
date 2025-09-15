@@ -7,19 +7,41 @@
 #include <vector>
 #include <deque>
 #include <array>
+#include <functional>
+#include <vma/vk_mem_alloc.h>
+
+
+struct DeletionQueue
+{
+	std::deque<std::function<void()>> deletors;
+
+	void push_function(std::function<void()>&& function) {
+		deletors.push_back(function);
+	}
+
+	void flush() {
+		// reverse iterate the deletion queue to execute all the functions
+		for (auto it = deletors.rbegin(); it != deletors.rend(); it++) {
+			(*it)(); //call functors
+		}
+
+		deletors.clear();
+	}
+};
+
 
 struct FrameData {
 	
 	VkCommandPool _commandPool;
 	VkCommandBuffer _mainCommandBuffer;
-	VkSemaphore _timelineSemaphore;
-	uint64_t _initialValue = 0; // staff for semaphore
+	VkSemaphore _renderSemaphore;
+	VkSemaphore _swapchainSemaphore;
 	VkFence _renderFence;
 
 };
 
 // triple buffering
-constexpr int FRAME_OVERLAP = 2;
+constexpr unsigned int FRAME_OVERLAP = 2;
 
 class VulkanRender : public IRender {
 
@@ -40,12 +62,12 @@ class VulkanRender : public IRender {
 #endif
 
 	VkInstance _instance = VK_NULL_HANDLE;
-	VkPhysicalDevice _physicalDevice = VK_NULL_HANDLE;
+	VkPhysicalDevice _chosenGPU = VK_NULL_HANDLE;
 	VkDevice _device = VK_NULL_HANDLE;
 	VkDebugUtilsMessengerEXT _debugMessenger = VK_NULL_HANDLE;
 	VkSurfaceKHR _surface = VK_NULL_HANDLE;
 	VkQueue _graphicsQueue = VK_NULL_HANDLE;
-	uint32_t _graphicsQueueIndex = NULL;
+	uint32_t _graphicsQueueFamily = NULL;
 
 	VkSwapchainKHR _swapchain = VK_NULL_HANDLE;
 	VkExtent2D _swapchainExtent{};
@@ -55,6 +77,8 @@ class VulkanRender : public IRender {
 	std::vector<VkImageView> _swapchainImageViews;
 	uint32_t swapchainImageIndex = 0;
 	
+
+
 
 public:
 
@@ -70,10 +94,10 @@ private:
 	void init_vulkan();
 	void init_swapchain();
 	void init_commands();
-	void init_sync_strucure();
+	void init_sync_structures();
 
 
-	void create_swapchain(int width, int height);
+	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();
 
 

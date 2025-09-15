@@ -32,7 +32,7 @@ VkSemaphoreSubmitInfo vkinit::semaphore_submit_info(VkPipelineStageFlags2 stageM
     info.stageMask = stageMask;
     info.semaphore = semaphore;
     info.deviceIndex = 0;
-    info.value = 1;
+    info.value = NULL;
 
     return info;
 }

@@ -12,8 +12,8 @@ struct FrameData {
 	
 	VkCommandPool _commandPool;
 	VkCommandBuffer _mainCommandBuffer;
-	VkSemaphore _renderSemaphore;
-	VkSemaphore _swapchainSemaphore;
+	VkSemaphore _timelineSemaphore;
+	uint64_t _initialValue = 0; // staff for semaphore
 	VkFence _renderFence;
 
 };

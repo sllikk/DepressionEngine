@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../IRender.h"
+#include "vk_types.h"
+
 #include <vulkan/vulkan.h>
 #include <GLFW/glfw3.h>
 #include <stdbool.h>
@@ -53,6 +55,7 @@ class VulkanRender : public IRender {
 
 	FrameData& get_current_frame() { return _frames[frame % FRAME_OVERLAP]; }
 
+	DeletionQueue _mainDeletionQueue;
 
 	// enable validation layers for vulkan if debug, but disable if release 
 #if NDEBUG
@@ -69,14 +72,23 @@ class VulkanRender : public IRender {
 	VkQueue _graphicsQueue = VK_NULL_HANDLE;
 	uint32_t _graphicsQueueFamily = NULL;
 
+	// for swapchain
 	VkSwapchainKHR _swapchain = VK_NULL_HANDLE;
-	VkExtent2D _swapchainExtent{};
-	VkFormat _swapchainImageFormat = VK_FORMAT_UNDEFINED;
+	AllocatedImage _drawImage;	
+	AllocatedImage _depthImage;
+	
+	uint32_t swapchainImageIndex = 0;
+	VkFormat _swapchainImageFormat;
 
 	std::vector<VkImage> _swapchainImages;
 	std::vector<VkImageView> _swapchainImageViews;
-	uint32_t swapchainImageIndex = 0;
-	
+
+	VkExtent2D _drawExtent;
+	VkExtent2D _swapchainExtent;
+
+	// VMA ALLOCATOR 
+	VmaAllocator _allocator;
+
 
 
 

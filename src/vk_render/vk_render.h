@@ -89,8 +89,7 @@ class VulkanRender : public IRender {
 	// VMA ALLOCATOR 
 	VmaAllocator _allocator;
 
-
-
+	VkPipelineLayout _meshPipeline;
 
 public:
 
@@ -107,7 +106,7 @@ private:
 	void init_swapchain();
 	void init_commands();
 	void init_sync_structures();
-
+	void init_pipelines();
 
 	void create_swapchain(uint32_t width, uint32_t height);
 	void destroy_swapchain();

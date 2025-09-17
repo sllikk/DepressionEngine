@@ -1,3 +1,4 @@
+#include "vk_render.h"
 #define GLFW_INCLUDE_VULKAN
 #define VMA_IMPLEMENTATION
 
@@ -339,6 +340,7 @@ void VulkanRender::init_sync_structures()
 	}
 }
 
+
 void VulkanRender::destroy_swapchain()
 {
 	vkDestroySwapchainKHR(_device, _swapchain, nullptr);
@@ -348,4 +350,28 @@ void VulkanRender::destroy_swapchain()
 		vkDestroyImageView(_device, _swapchainImageViews[i], nullptr);
 	}
 }
+
+
+void VulkanRender::init_pipelines()
+{
+	VkShaderModule _vertexShader = nullptr;
+	VkShaderModule _fragShader = nullptr;
+	
+	const std::string& vert_path = "compiled_shaders/triangle.vert.spv";
+	const std::string& frag_path = "compiled_shaders/triangle.frag.spv";
+
+	if (!vkutil::load_shader_module(vert_path.c_str(), _device, &_vertexShader))
+	{
+		std::cerr << "Error load: " << vert_path.c_str();
+	}
+
+	if (!vkutil::load_shader_module(frag_path.c_str(), _device, &_fragShader))
+	{
+		std::cerr << "Error load: " << frag_path.c_str();
+	}
+
+	
+
+}
+
 

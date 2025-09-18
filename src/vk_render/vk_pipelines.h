@@ -49,7 +49,9 @@ public:
     void enable_depthtest(bool depthWriteEnable, VkCompareOp op);
 
 
-    VkPipeline build_pipeline(VkDevice device, VkRenderPass renderPass);
+    VkPipeline build_pipeline(VkDevice device, VkRenderPass renderPass);  // for vulkan 1.2 render pass 
+    VkPipeline build_pipeline(VkDevice device); // that for vulkan 1.3 and dynamic render
+
 
     void set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader);
     

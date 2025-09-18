@@ -2,8 +2,6 @@
 #define GLFW_INCLUDE_VULKAN
 #define VMA_IMPLEMENTATION
 
-#include "vk_render.h"
-
 
 #include "vk_initializers.h"
 #include "vk_pipelines.h"
@@ -29,6 +27,7 @@ void VulkanRender::init(int width, int height, void* ptr_window)
 	init_swapchain();
 	init_commands();
 	init_sync_structures();
+	init_pipelines();
 
 	blsEngineInit = true;
 
@@ -74,17 +73,11 @@ void VulkanRender::beginRenderFrame()
 
 
 	VK_CHECK(vkAcquireNextImageKHR(_device, _swapchain, 1000000000, get_current_frame()._swapchainSemaphore, nullptr, &swapchainImageIndex));
-	//< draw_2
-
-	//> draw_3
-		//naming it cmd for shorter writing
+	
 	VkCommandBuffer cmd = get_current_frame()._mainCommandBuffer;
 
-	// now that we are sure that the commands finished executing, we can safely
-	// reset the command buffer to begin recording again.
 	VK_CHECK(vkResetCommandBuffer(cmd, 0));
 
-	//begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know that
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
 	_drawExtent.width = _drawImage.imageExtent.width;
@@ -92,31 +85,23 @@ void VulkanRender::beginRenderFrame()
 
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-	// transition our main draw image into general layout so we can write into it
-	// we will overwrite it all so we dont care about what was the older layout
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
-	//make a clear-color from frame number. This will flash with a 120 frame period.
 	VkClearColorValue clearValue;
 	float flash = std::abs(std::sin(frame / 120.f));
 	clearValue = { { 0.0f, 0.0f, flash, 1.0f } };
 
 	VkImageSubresourceRange clearRange = vkinit::image_subresource_range(VK_IMAGE_ASPECT_COLOR_BIT);
 
-	//clear image
 	vkCmdClearColorImage(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
 
-	//transition the draw image and the swapchain image into their correct transfer layouts
 	vkutil::transition_image(cmd, _drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-	// execute a copy from the draw image into the swapchain
+	
 	vkutil::copy_image_to_image(cmd, _drawImage.image, _swapchainImages[swapchainImageIndex], _drawExtent, _swapchainExtent);
 
-	// set swapchain image layout to Present so we can show it on the screen
 	vkutil::transition_image(cmd, _swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
-	//finalize the command buffer (we can no longer add commands, but it can now be executed)
 	VK_CHECK(vkEndCommandBuffer(cmd));
 
 	VkCommandBufferSubmitInfo cmdinfo = vkinit::command_buffer_submit_info(cmd);
@@ -126,16 +111,8 @@ void VulkanRender::beginRenderFrame()
 
 	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo, &signalInfo, &waitInfo);
 
-	//submit command buffer to the queue and execute it.
-	// _renderFence will now block until the graphic commands finish execution
 	VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submit, get_current_frame()._renderFence));
-	//< draw_5
-	// 
-	//> draw_6
-		//prepare present
-		// this will put the image we just rendered to into the visible window.
-		// we want to wait on the _renderSemaphore for that, 
-		// as its necessary that drawing commands have finished before the image is displayed to the user
+	
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.pNext = nullptr;
@@ -149,7 +126,6 @@ void VulkanRender::beginRenderFrame()
 
 	VK_CHECK(vkQueuePresentKHR(_graphicsQueue, &presentInfo));
 
-	//increase the number of frames drawn
 	frame++;
 
 
@@ -357,20 +333,73 @@ void VulkanRender::init_pipelines()
 	VkShaderModule _vertexShader = nullptr;
 	VkShaderModule _fragShader = nullptr;
 	
-	const std::string& vert_path = "compiled_shaders/triangle.vert.spv";
-	const std::string& frag_path = "compiled_shaders/triangle.frag.spv";
+	// that path for shaders in folder 
+	const std::string& vert_path = "../../../compiled_shaders/triangle_shader.vert.spv";
+	const std::string& frag_path = "../../../compiled_shaders/triangle_shader.frag.spv";
 
 	if (!vkutil::load_shader_module(vert_path.c_str(), _device, &_vertexShader))
 	{
-		std::cerr << "Error load: " << vert_path.c_str();
+		std::cerr << "Error load: " << vert_path.c_str() << std::endl;
+	}
+	else
+	{
+		std::cout << "Load Shader: " << vert_path.c_str() << std::endl;
 	}
 
 	if (!vkutil::load_shader_module(frag_path.c_str(), _device, &_fragShader))
 	{
-		std::cerr << "Error load: " << frag_path.c_str();
+		std::cerr << "Error load: " << frag_path.c_str() << std::endl;
 	}
-
+	else
+	{
+		std::cout << "Load Shader: " << frag_path << std::endl;
+	}
 	
+	VkPushConstantRange push_constant{};
+	push_constant.offset = 0;
+	push_constant.size = sizeof(GPUPushConstant);
+	push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
+	VkPipelineLayoutCreateInfo pipeline_info = vkinit::pipeline_layout_create_info();
+	pipeline_info.pPushConstantRanges = &push_constant;
+	pipeline_info.pushConstantRangeCount = 1;
+
+	VK_CHECK(vkCreatePipelineLayout(_device, &pipeline_info, nullptr, &_meshPipelineLayout));
+
+	PipelineBuilder pipelineBuilder{};
+	//use the triangle layout we created
+	pipelineBuilder._pipelineLayout = _meshPipelineLayout;
+	//connecting the vertex and pixel shaders to the pipeline
+	pipelineBuilder.set_shaders(_vertexShader, _fragShader);
+	//it will draw triangles
+	pipelineBuilder.set_input_topology(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	//filled triangles
+	pipelineBuilder.set_polygon_mode(VK_POLYGON_MODE_FILL);
+	//no backface culling
+	pipelineBuilder.set_cull_mode(VK_CULL_MODE_NONE, VK_FRONT_FACE_CLOCKWISE);
+	//no multisampling
+	pipelineBuilder.set_multisampling_none();
+	//no blending
+	pipelineBuilder.disable_blending();
+	//no depth testing
+	pipelineBuilder.disable_depthtest();
+
+	//connect the image format we will draw into, from draw image
+	pipelineBuilder.set_color_attachment_format(_drawImage.imageFormat);
+	pipelineBuilder.set_depth_format(VK_FORMAT_UNDEFINED);
+
+	//finally build the pipeline
+	_meshPipeline = pipelineBuilder.build_pipeline(_device);
+
+	//clean structures
+	vkDestroyShaderModule(_device, _vertexShader, nullptr);
+	vkDestroyShaderModule(_device, _fragShader, nullptr);
+
+	_mainDeletionQueue.push_function([&]() {
+		vkDestroyPipelineLayout(_device, _meshPipelineLayout, nullptr);
+		vkDestroyPipeline(_device, _meshPipeline, nullptr);
+	});
+
 
 }
 

@@ -89,7 +89,8 @@ class VulkanRender : public IRender {
 	// VMA ALLOCATOR 
 	VmaAllocator _allocator;
 
-	VkPipelineLayout _meshPipeline;
+	VkPipelineLayout _meshPipelineLayout;
+	VkPipeline _meshPipeline;
 
 public:
 
